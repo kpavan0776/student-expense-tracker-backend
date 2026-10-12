@@ -1,0 +1,33 @@
+{
+  "name": "student-expense-tracker-backend",
+  "version": "1.0.0",
+  "description": "Student Expense Tracker Backend - MySQL integration planned.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kpavan0776/student-expense-tracker-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kpavan0776/student-expense-tracker-backend/issues"
+  },
+  "homepage": "https://github.com/kpavan0776/student-expense-tracker-backend#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.24.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
