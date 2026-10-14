@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2/promise");
@@ -10,16 +9,23 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({
-  origin: "http://localhost:8080"
+  origin: [
+    "http://localhost:8080",
+    "https://student-expense-tracker-frontend-five.vercel.app"
+  ]
 }));
+
 app.use(express.json());
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
+  port: Number(process.env.DB_PORT || 4000),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  ssl: {
+    minVersion: "TLSv1.2"
+  },
   waitForConnections: true,
   connectionLimit: 10
 });
@@ -46,24 +52,31 @@ function authenticate(req, res, next) {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
-    return res.status(401).json({ message: "Invalid or expired login." });
+    return res.status(401).json({
+      message: "Invalid or expired login."
+    });
   }
 }
 
 app.get("/", (req, res) => {
-  res.json({ message: "Student Expense Tracker API is running!" });
+  res.json({
+    message: "Student Expense Tracker API is running!"
+  });
 });
 
 app.get("/api/test", async (req, res) => {
   try {
     await pool.query("SELECT 1");
+
     res.json({
       success: true,
-      message: "Backend and MySQL connected successfully!"
+      message: "Backend and TiDB connected successfully!"
     });
   } catch (error) {
     console.error("Database test failed:", error.message);
-    res.status(500).json({ message: "Database connection failed." });
+    res.status(500).json({
+      message: "Database connection failed."
+    });
   }
 });
 
@@ -73,7 +86,7 @@ app.post("/api/signup", async (req, res) => {
 
     if (
       typeof name !== "string" || !name.trim() ||
-      typeof email !== "string" ||
+      typeof email !== "string" || !email.trim() ||
       typeof password !== "string" ||
       password.length < 8 ||
       password.length > 72
@@ -122,7 +135,9 @@ app.post("/api/signup", async (req, res) => {
     }
 
     console.error("Signup failed:", error.message);
-    res.status(500).json({ message: "Could not create the account." });
+    res.status(500).json({
+      message: "Could not create the account."
+    });
   }
 });
 
@@ -166,7 +181,9 @@ app.post("/api/signin", async (req, res) => {
     });
   } catch (error) {
     console.error("Signin failed:", error.message);
-    res.status(500).json({ message: "Could not sign in." });
+    res.status(500).json({
+      message: "Could not sign in."
+    });
   }
 });
 
@@ -183,7 +200,9 @@ app.get("/api/expenses", authenticate, async (req, res) => {
     res.json(expenses);
   } catch (error) {
     console.error("Fetching expenses failed:", error.message);
-    res.status(500).json({ message: "Could not fetch expenses." });
+    res.status(500).json({
+      message: "Could not fetch expenses."
+    });
   }
 });
 
@@ -199,7 +218,6 @@ app.post("/api/expenses", authenticate, async (req, res) => {
       category.trim().length > 100 ||
       amount === "" || amount === null ||
       !Number.isFinite(parsedAmount) || parsedAmount <= 0 ||
-      !Number.isFinite(Number(amount)) ||
       typeof expense_date !== "string" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(expense_date) ||
       !Number.isFinite(Date.parse(expense_date))
@@ -228,20 +246,24 @@ app.post("/api/expenses", authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error("Saving expense failed:", error.message);
-    res.status(500).json({ message: "Could not save the expense." });
+    res.status(500).json({
+      message: "Could not save the expense."
+    });
   }
 });
 
 async function startServer() {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-    throw new Error("Set JWT_SECRET to a private secret of at least 32 characters.");
+    throw new Error(
+      "Set JWT_SECRET to a private secret of at least 32 characters."
+    );
   }
 
   await pool.query("SELECT 1");
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Backend running on port ${PORT}`);
-    console.log("MySQL connection successful.");
+    console.log("Database connection successful.");
   });
 }
 
