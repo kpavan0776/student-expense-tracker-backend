@@ -10,20 +10,19 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Allow requests from the deployed frontend and local development.
 const allowedOrigins = [
-  "https://student-expense-tracker-frontend-8adut0mn8-acme-77ae2.vercel.app",
+  "https://student-expense-tracker-frontend-85wh8t5tm-acme-77ae2.vercel.app",
   "https://student-expense-tracker-frontend-five.vercel.app",
+  "https://student-expense-tracker-frontend-8adut0mn8-acme-77ae2.vercel.app",
   "http://localhost:8080",
   "http://localhost:5173"
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-
     return callback(new Error("Origin not allowed by CORS: " + origin));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -32,7 +31,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Cloud MySQL database connection
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT || 4000),
@@ -47,7 +45,6 @@ const pool = mysql.createPool({
   }
 });
 
-// Verify login token
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -57,26 +54,26 @@ function authenticateToken(req, res, next) {
     });
   }
 
-  const token = authHeader.split(" ")[1];
+  jwt.verify(
+    authHeader.split(" ")[1],
+    process.env.JWT_SECRET,
+    (err, user) => {
+      if (err) {
+        return res.status(403).json({
+          message: "Invalid or expired token"
+        });
+      }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({
-        message: "Invalid or expired token"
-      });
+      req.user = user;
+      next();
     }
-
-    req.user = user;
-    next();
-  });
+  );
 }
 
-// API home
 app.get("/", (req, res) => {
   res.send("Student Expense Tracker API is running!");
 });
 
-// Test API and database connection
 app.get("/api/test", async (req, res) => {
   try {
     const connection = await pool.getConnection();
@@ -89,7 +86,6 @@ app.get("/api/test", async (req, res) => {
     });
   } catch (error) {
     console.error("Database test failed:", error.message);
-
     res.status(500).json({
       success: false,
       message: "Database connection failed"
@@ -189,13 +185,9 @@ app.post("/api/signin", async (req, res) => {
     }
 
     const user = users[0];
+    const matches = await bcrypt.compare(password, user.password);
 
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.password
-    );
-
-    if (!passwordMatches) {
+    if (!matches) {
       return res.status(401).json({
         message: "Invalid email or password"
       });
@@ -225,14 +217,16 @@ app.post("/api/signin", async (req, res) => {
   }
 });
 
-// Get the signed-in user's expenses
+// Get expenses.
+// The database column is expense_date, while the API uses date.
 app.get("/api/expenses", authenticateToken, async (req, res) => {
   try {
     const [expenses] = await pool.execute(
-      `SELECT id, title, amount, category, date
+      `SELECT id, title, amount, category,
+              expense_date AS date
        FROM expenses
        WHERE user_id = ?
-       ORDER BY date DESC, id DESC`,
+       ORDER BY expense_date DESC, id DESC`,
       [req.user.id]
     );
 
@@ -246,28 +240,37 @@ app.get("/api/expenses", authenticateToken, async (req, res) => {
   }
 });
 
-// Add an expense
+// Add an expense.
 app.post("/api/expenses", authenticateToken, async (req, res) => {
   try {
-    const { title, amount, category, date } = req.body;
+    const { title, amount, category } = req.body;
+    const date = req.body.date || req.body.expense_date;
 
     if (
-      !title ||
+      typeof title !== "string" ||
+      !title.trim() ||
+      !date ||
+      !category ||
       amount === undefined ||
       amount === null ||
+      amount === "" ||
       !Number.isFinite(Number(amount)) ||
-      Number(amount) <= 0 ||
-      !category ||
-      !date
+      Number(amount) <= 0
     ) {
       return res.status(400).json({
-        message: "Please provide a valid title, amount, category and date"
+        message: "Please provide a valid title, date, amount and category."
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        message: "Please provide a valid date in YYYY-MM-DD format."
       });
     }
 
     const [result] = await pool.execute(
       `INSERT INTO expenses
-       (user_id, title, amount, category, date)
+       (user_id, title, amount, category, expense_date)
        VALUES (?, ?, ?, ?, ?)`,
       [
         req.user.id,
@@ -291,10 +294,11 @@ app.post("/api/expenses", authenticateToken, async (req, res) => {
   }
 });
 
-// Start server
 async function startServer() {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-    console.error("JWT_SECRET must be set to at least 32 characters.");
+    console.error(
+      "Server startup failed: Set JWT_SECRET to a private secret of at least 32 characters."
+    );
     process.exit(1);
   }
 
@@ -302,7 +306,6 @@ async function startServer() {
     const connection = await pool.getConnection();
     await connection.ping();
     connection.release();
-
     console.log("Database connection successful.");
   } catch (error) {
     console.error("Database connection check failed:", error.message);
